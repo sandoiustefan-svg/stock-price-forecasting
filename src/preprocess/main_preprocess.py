@@ -1,8 +1,9 @@
 import pandas as pd
 from data_formating import DataFormating
 from decomp_per_id import Decompose
-from normalize_per_id import Normalize
+from normalize_per_id import NormalizeMean
 from holdout_decomposer_per_id import HoldoutDecomposer
+from plot_decomposition import DecompPlotter
 
 def main():
     decomp = int(input("Fill in the decomposition method (1=STL, 2=Stats Additive, 3=Stats Multiplicative): ").strip()) 
@@ -64,7 +65,7 @@ def main():
 
     print(f" The train residuals before normalization: {train_residuals.head()}")
 
-    normalization = Normalize(train_residuals)
+    normalization = NormalizeMean(train_residuals)
     mean_var_per_id = normalization.compute_mean_variance_per_id()
     # here we are going to save the mean, var of the residuals per id
     mean_var_per_id.to_csv(f"data/preprocessed/{decomposer.decomp_type}/mean_var_per_id.csv", index=False)
@@ -91,6 +92,33 @@ def main():
     test_trend.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/trend.csv", index=False)
     test_seasonal.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/seasonal.csv", index=False)
     test_residuals.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/residuals.csv", index=False)
+
+    train_plot = (
+        decomp_train[["Series","date","value","trend","seasonal"]]  
+        .merge(train_residuals[["Series","date","residuals"]],      
+            on=["Series","date"], how="left", validate="one_to_one")
+        [["Series","date","value","trend","seasonal","residuals"]]
+    )
+
+    val_plot = (
+            val_full.rename(columns={"trend_fc": "trend"})
+            [["Series","date","value","trend","seasonal","residuals"]]
+    )
+    test_plot = (
+            test_full.rename(columns={"trend_fc": "trend"})
+            [["Series","date","value","trend","seasonal","residuals"]]
+    )
+
+    plotter = DecompPlotter(out_root="src/results", dpi=150, figsize=(12, 8))
+    plotter.plot_all(
+        train_df=train_plot,
+        val_df=val_plot,
+        test_df=test_plot,
+        method_label=decomposer.decomp_type,  # "STL", "stats_decompose_additive", "stats_decompose_multiplicative"
+        series_ids=None,                      # or e.g. ["N1877", "N1880"]
+        max_series=3,                      # or an int like 24
+        log_domain=(decomposer.decomp_type in {"STL", "stats_decompose_additive"})
+    )
 
     print("\nDiagnostics after per-ID normalization:")
     for name, df in [("TRAIN", train_residuals), ("VAL", val_residuals), ("TEST", test_residuals)]:
