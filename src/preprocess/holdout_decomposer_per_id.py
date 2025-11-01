@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Literal
-from statsmodels.tsa.holtwinters import ExponentialSmoothing 
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 Method = Literal["STL", "stats_decompose_additive", "stats_decompose_multiplicative"]
 
@@ -16,7 +16,6 @@ class HoldoutDecomposer:
         self.train_decomp["date"] = pd.to_datetime(self.train_decomp["date"], errors="coerce")
         self.train_decomp = self.train_decomp.dropna(subset=["Series", "date"])
 
-        # build per-ID seasonal template once
         self._seas_tpl = self._build_seasonal_template(self.train_decomp, method=self.method, period=self.period)
 
     @staticmethod
@@ -49,12 +48,17 @@ class HoldoutDecomposer:
             pivot = pivot.subtract(pivot.mean(axis=1), axis=0)
         return pivot.stack().rename("season_tpl").reset_index()
 
-    def _forecast_trend_for(self, target_df: pd.DataFrame) -> pd.DataFrame:
+    def _forecast_trend_for(self, target_df: pd.DataFrame,
+                            offset_by_id: dict[str, int] | None = None) -> pd.DataFrame:
         out = []
         for sid, tr in self.train_decomp.groupby("Series", sort=False):
             horizon = int((target_df["Series"] == sid).sum())
             if horizon == 0:
                 continue
+
+            # number of steps between end of TRAIN and the first target date for this ID
+            offs = 0 if offset_by_id is None else int(offset_by_id.get(sid, 0))
+
             y_trend = pd.to_numeric(tr["trend"], errors="coerce").dropna().to_numpy()
             if y_trend.size == 0:
                 fc = np.zeros(horizon)
@@ -62,13 +66,17 @@ class HoldoutDecomposer:
                 try:
                     model = ExponentialSmoothing(y_trend, trend="add", seasonal=None, damped_trend=True)
                     fit = model.fit(optimized=True)
-                    fc = fit.forecast(horizon)
+                    fc_all = fit.forecast(offs + horizon)   # forecast far enough
+                    fc = fc_all[offs:]                      # drop the offset part to align with target dates
                 except Exception:
                     fc = np.full(horizon, float(y_trend[-1]))
+
             if self.method == "stats_decompose_multiplicative":
                 fc = np.maximum(fc, 1e-12)
+
             t_dates = target_df.loc[target_df["Series"] == sid, "date"].values
             out.append(pd.DataFrame({"Series": sid, "date": t_dates, "trend_fc": fc}))
+
         return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=["Series", "date", "trend_fc"])
 
     def _apply_per_id_z(self, residuals_df: pd.DataFrame) -> pd.DataFrame:
@@ -79,13 +87,15 @@ class HoldoutDecomposer:
         out.loc[valid, "residuals"] = (out.loc[valid, "residuals"] - out.loc[valid, "mu"]) / out.loc[valid, "sigma"]
         return out.drop(columns=["mu", "sigma"])
 
-    def transform(self, target_df: pd.DataFrame, harmonics: int = 3):
+    def transform(self, target_df: pd.DataFrame, harmonics: int = 3,
+                  offset_by_id: dict[str, int] | None = None):
         df = target_df.copy()
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df.dropna(subset=["Series", "date", "value"]).sort_values(["Series", "date"])
         df["phase"] = self._phase(df["date"], self.period)
-        df = df.merge(self._seas_tpl, on=["Series", "phase"], how="left")          # per-ID seasonal
-        df = df.merge(self._forecast_trend_for(df), on=["Series", "date"], how="left")  # per-ID trend
+        df = df.merge(self._seas_tpl, on=["Series", "phase"], how="left")  # per-ID seasonal
+        df = df.merge(self._forecast_trend_for(df, offset_by_id=offset_by_id),
+                      on=["Series", "date"], how="left")                   # per-ID trend (aligned)
 
         if self.method in ("STL", "stats_decompose_additive"):
             if (df["value"] <= 0).any():

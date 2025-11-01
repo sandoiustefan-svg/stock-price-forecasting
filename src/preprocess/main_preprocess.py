@@ -83,20 +83,27 @@ def main():
         period=12,
     )
 
-    val_full, val_trend, val_seasonal, val_residuals = hd_decomposer.transform(val, harmonics=3)
+    val_full, val_trend, val_seasonal, val_residuals = hd_decomposer.transform(val, harmonics=3, offset_by_id=None)
     val_trend.to_csv(f"data/preprocessed/{decomposer.decomp_type}/val/trend.csv", index=False)
     val_seasonal.to_csv(f"data/preprocessed/{decomposer.decomp_type}/val/seasonal.csv", index=False)
     val_residuals.to_csv(f"data/preprocessed/{decomposer.decomp_type}/val/residuals.csv", index=False)
 
-    test_full, test_trend, test_seasonal, test_residuals = hd_decomposer.transform(test, harmonics=3)
+    val_len_by_id = val.groupby("Series").size().to_dict()
+    test_full, test_trend, test_seasonal, test_residuals = hd_decomposer.transform(test, harmonics=3,  offset_by_id=val_len_by_id)
     test_trend.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/trend.csv", index=False)
     test_seasonal.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/seasonal.csv", index=False)
     test_residuals.to_csv(f"data/preprocessed/{decomposer.decomp_type}/test/residuals.csv", index=False)
 
     train_plot = (
-        decomp_train[["Series","date","value","trend","seasonal"]]  
-        .merge(train_residuals[["Series","date","residuals"]],      
-            on=["Series","date"], how="left", validate="one_to_one")
+        train[["Series","date","value"]]  # raw (linear) value
+        .merge(
+            decomp_train[["Series","date","trend","seasonal"]],
+            on=["Series","date"], how="left", validate="one_to_one"
+        )
+        .merge(
+            train_residuals[["Series","date","residuals"]],
+            on=["Series","date"], how="left", validate="one_to_one"
+        )
         [["Series","date","value","trend","seasonal","residuals"]]
     )
 
