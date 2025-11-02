@@ -25,7 +25,7 @@ class NormalizeMean:
         merged = df.merge(per_id_stats[["Series", "mu", "sigma"]], on="Series", how="left")
 
         z = (merged["residuals"] - merged["mu"]) / merged["sigma"]
-        df["residuals"] = z
+        df["value"] = z
 
         return df
        

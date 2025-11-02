@@ -5,6 +5,12 @@ from normalize_per_id import NormalizeMean
 from holdout_decomposer_per_id import HoldoutDecomposer
 from plot_decomposition import DecompPlotter
 
+def _force_str_series(df: pd.DataFrame, col: str = "Series") -> pd.DataFrame:
+    """Ensure Series IDs are comparable across joins."""
+    out = df.copy()
+    out[col] = out[col].astype(str).str.strip()
+    return out
+
 def main():
     decomp = int(input("Fill in the decomposition method (1=STL, 2=Stats Additive, 3=Stats Multiplicative): ").strip()) 
 
@@ -54,6 +60,8 @@ def main():
         #here we apply log_transform
         decomp_train = decomposer.normal_decompose_per_id(model="multiplicative", require_positive=True)
         print(f"These are the new columns from the decomp dataset with the {decomposer.decomp_type} type: {decomp_train.columns.to_list()}")
+
+    decomp_train = _force_str_series(decomp_train)
 
     train_residuals = decomp_train[["Series", "date", "residuals"]]
 
@@ -136,8 +144,7 @@ def main():
         print(f"[{name}] global mean/std: {mu:.4f} / {sd:.4f} | "
               f"per-ID |mean|>0.10: {(per_id_mu > 0.10).sum()} / {per_id_mu.size} | "
               f"per-ID std outside [0.8,1.2]: {((per_id_sd < 0.8) | (per_id_sd > 1.2)).sum()} / {per_id_sd.size}")
-
-
+        
 
 if __name__ == "__main__":
     main()
