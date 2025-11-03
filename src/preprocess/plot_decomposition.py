@@ -1,4 +1,3 @@
-# src/plots/decomp_plotter.py
 from __future__ import annotations
 import re
 from pathlib import Path
@@ -33,7 +32,6 @@ class DecompPlotter:
         self.dpi = dpi
         self.figsize = figsize
 
-    # ---------- public API ----------
 
     def plot_all(
         self,
@@ -43,7 +41,7 @@ class DecompPlotter:
         method_label: str,
         series_ids: Optional[Iterable[str]] = None,
         max_series: Optional[int] = None,
-        log_domain: bool = False,
+        log_domain: bool = False,   # True only for STL/additive
     ) -> None:
         base = self._method_dir(method_label)
         (base / "train").mkdir(parents=True, exist_ok=True)
@@ -57,15 +55,19 @@ class DecompPlotter:
             print("[DecompPlotter] No series IDs to plot.")
             return
 
-        self._plot_split(train_df, ids, base / "train", split_name="train", log_domain=log_domain)
+        is_multiplicative = (method_label == "stats_decompose_multiplicative")
+
+        self._plot_split(train_df, ids, base / "train", split_name="train",
+                         log_domain=log_domain, is_multiplicative=is_multiplicative)
         if val_df is not None:
-            self._plot_split(val_df, ids, base / "val", split_name="val", log_domain=log_domain)
+            self._plot_split(val_df, ids, base / "val", split_name="val",
+                             log_domain=log_domain, is_multiplicative=is_multiplicative)
         if test_df is not None:
-            self._plot_split(test_df, ids, base / "test", split_name="test", log_domain=log_domain)
+            self._plot_split(test_df, ids, base / "test", split_name="test",
+                             log_domain=log_domain, is_multiplicative=is_multiplicative)
 
         print(f"[DecompPlotter] Saved plots under: {base}")
 
-    # ---------- internals ----------
 
     def _method_dir(self, method_label: str) -> Path:
         if method_label == "STL":
@@ -130,6 +132,7 @@ class DecompPlotter:
         out_dir: Path,
         split_name: str,
         log_domain: bool,
+        is_multiplicative: bool,   
     ) -> None:
         needed = {"Series", "date", "seasonal", "residuals"}
         missing = needed - set(df.columns)
@@ -149,8 +152,6 @@ class DecompPlotter:
 
             have_value = "value" in sub.columns
 
-            # --- Continuation candidates ---
-            # For log-domain methods we can reconstruct in log (trend+seasonal) or convert to linear (exp).
             if log_domain:
                 yhat_log = pd.to_numeric(sub[trend_col], errors="coerce") + pd.to_numeric(sub["seasonal"], errors="coerce")
                 with np.errstate(over="ignore", invalid="ignore"):
@@ -159,89 +160,59 @@ class DecompPlotter:
                 tr = pd.to_numeric(sub[trend_col], errors="coerce")
                 se = pd.to_numeric(sub["seasonal"], errors="coerce")
                 yhat_lin = tr * se
-                yhat_log = None  # not used
+                yhat_log = None
 
-            # --- Choose plotting domain for Panel 1 automatically to avoid double-logging on TRAIN ---
             if have_value:
                 v = pd.to_numeric(sub["value"], errors="coerce")
-
                 if log_domain:
-                    # Compare log(v) vs yhat_log  *and*  v vs yhat_lin; choose smaller RMSE.
                     with np.errstate(divide="ignore", invalid="ignore"):
                         v_log = np.log(v)
                     rmse_log = self._rmse(v_log, yhat_log)
                     rmse_lin = self._rmse(v, yhat_lin)
-
                     if rmse_log <= rmse_lin:
-                        y_true = v_log
-                        y_hat = yhat_log
-                        val_label = "value (log)"
+                        y_true, y_hat, val_label = v_log, yhat_log, "value (log)"
                     else:
-                        y_true = v
-                        y_hat = yhat_lin
-                        val_label = "value"
+                        y_true, y_hat, val_label = v, yhat_lin, "value"
                 else:
-                    y_true = v
-                    y_hat = yhat_lin
-                    val_label = "value"
+                    y_true, y_hat, val_label = v, yhat_lin, "value"
             else:
-                # No ground-truth values available; show forecast in a natural viewing domain.
-                if log_domain:
-                    y_true = None
-                    y_hat = yhat_lin  # linear scale is more interpretable
-                    val_label = "value"
-                else:
-                    y_true = None
-                    y_hat = yhat_lin
-                    val_label = "value"
+                y_true, y_hat, val_label = None, yhat_lin, "value"
 
-            # Drop rows with all-NaN across plotted components
-            cols_to_check = ["seasonal", trend_col, "residuals"]
-            if have_value:
-                cols_to_check.append("value")
+            cols_to_check = ["seasonal", trend_col, "residuals"] + (["value"] if have_value else [])
             valid_mask = ~sub[cols_to_check].isna().all(axis=1)
             sub = sub.loc[valid_mask]
             y_hat = pd.Series(y_hat, index=sub.index).loc[valid_mask]
             if y_true is not None:
                 y_true = pd.Series(y_true, index=sub.index).loc[valid_mask]
-
             if sub.empty:
                 continue
 
-            # ---- Figure ----
             fig, axes = plt.subplots(nrows=4, ncols=1, figsize=self.figsize, sharex=True)
             ax_idx = 0
 
-            # Panel 1: True vs Forecasted continuation/reconstruction
             if y_true is not None:
                 axes[ax_idx].plot(sub["date"], y_true, lw=1.2, label="true")
-                axes[ax_idx].plot(sub["date"], y_hat, lw=1.2, ls="--",
-                                  label=("forecast (trend+season)" if log_domain else "forecast (trend×season)"))
-                axes[ax_idx].legend(loc="upper left", fontsize=9, frameon=False)
-            else:
-                axes[ax_idx].plot(sub["date"], y_hat, lw=1.2, ls="--",
-                                  label=("forecast (trend+season)" if log_domain else "forecast (trend×season)"))
-                axes[ax_idx].legend(loc="upper left", fontsize=9, frameon=False)
+            axes[ax_idx].plot(sub["date"], y_hat, lw=1.2, ls="--",
+                              label=("forecast (trend+season)" if log_domain else "forecast (trend×season)"))
+            axes[ax_idx].legend(loc="upper left", fontsize=9, frameon=False)
             axes[ax_idx].set_ylabel(val_label)
             axes[ax_idx].grid(True, alpha=0.3)
             ax_idx += 1
 
-            # Panel 2: Trend / Trend forecast
             axes[ax_idx].plot(sub["date"], sub[trend_col], lw=1.2)
             axes[ax_idx].set_ylabel("trend" if trend_col == "trend" else "trend_fc")
             axes[ax_idx].grid(True, alpha=0.3)
             ax_idx += 1
 
-            # Panel 3: Seasonal
             axes[ax_idx].plot(sub["date"], sub["seasonal"], lw=1.2)
             axes[ax_idx].set_ylabel("seasonal")
             axes[ax_idx].grid(True, alpha=0.3)
             ax_idx += 1
 
-            # Panel 4: Residuals
             axes[ax_idx].plot(sub["date"], sub["residuals"], lw=1.2)
-            axes[ax_idx].axhline(0.0, ls="--", lw=0.8)
-            axes[ax_idx].set_ylabel("residuals")
+            baseline = 1.0 if is_multiplicative else 0.0
+            axes[ax_idx].axhline(baseline, ls="--", lw=0.8)
+            axes[ax_idx].set_ylabel("residual factor" if is_multiplicative else "residuals")
             axes[ax_idx].grid(True, alpha=0.3)
 
             fig.suptitle(f"{split_name.upper()} · Series {sid}", y=0.98)

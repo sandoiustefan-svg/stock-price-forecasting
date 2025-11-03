@@ -6,7 +6,6 @@ from holdout_decomposer_per_id import HoldoutDecomposer
 from plot_decomposition import DecompPlotter
 
 def _force_str_series(df: pd.DataFrame, col: str = "Series") -> pd.DataFrame:
-    """Ensure Series IDs are comparable across joins."""
     out = df.copy()
     out[col] = out[col].astype(str).str.strip()
     return out
@@ -130,8 +129,8 @@ def main():
         val_df=val_plot,
         test_df=test_plot,
         method_label=decomposer.decomp_type,  # "STL", "stats_decompose_additive", "stats_decompose_multiplicative"
-        series_ids=None,                      # or e.g. ["N1877", "N1880"]
-        max_series=3,                      # or an int like 24
+        series_ids=None,                      # ["N1877", "N1880"]
+        max_series=3,                      # or an int like 3
         log_domain=(decomposer.decomp_type in {"STL", "stats_decompose_additive"})
     )
 

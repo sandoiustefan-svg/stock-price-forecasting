@@ -1,4 +1,3 @@
-# src/model/recompose_total_error.py
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -8,10 +7,6 @@ METHOD = "stats_decompose_multiplicative"   # "STL" | "stats_decompose_additive"
 MODEL  = "LSTM"  # "LSTM" | "arima"
 
 def load_scalers(base_dir: Path) -> pd.DataFrame:
-    """
-    mean_var_per_id.csv must have columns: Series, mu, sigma (computed on TRAIN residuals in RAW scale).
-    We rename to resid_mean/resid_std and guard sigma!=0.
-    """
     s = pd.read_csv(base_dir / "mean_var_per_id.csv")
     s = s.rename(columns={"mu": "resid_mean", "sigma": "resid_std"})
     s["resid_std"] = s["resid_std"].replace(0.0, 1.0).fillna(1.0)
@@ -19,13 +14,6 @@ def load_scalers(base_dir: Path) -> pd.DataFrame:
 
 
 def _load_one(base_dir: Path, split: str, name: str, col: str) -> pd.DataFrame:
-    """
-    Helper to load a component CSV and standardize columns.
-    Expected files:
-      - trend.csv with ['Series','date','trend']
-      - seasonal.csv with ['Series','date','seasonal']
-      - residuals.csv with ['Series','date','residuals', ...]
-    """
     f = base_dir / split / f"{name}.csv"
     if not f.exists():
         raise FileNotFoundError(f"Missing file: {f}")
@@ -38,10 +26,6 @@ def _load_one(base_dir: Path, split: str, name: str, col: str) -> pd.DataFrame:
 
 
 def load_components(base_dir: Path, split: str) -> pd.DataFrame:
-    """
-    Loads trend, seasonal and residuals (z-scored) and merges them.
-    Returns: ['Series','date','trend','seasonal','residuals_z']
-    """
     tr = _load_one(base_dir, split, "trend", "trend")
     se = _load_one(base_dir, split, "seasonal", "seasonal")
     re = _load_one(base_dir, split, "residuals", "residuals").rename(columns={"residuals": "residuals_z"})
@@ -51,9 +35,6 @@ def load_components(base_dir: Path, split: str) -> pd.DataFrame:
 
 
 def load_pred(method_label: str, split: str) -> pd.DataFrame:
-    """
-    Loads model residual predictions in Z space: ['Series','date','resid_pred'].
-    """
     if MODEL.lower() == "lstm":
         f = Path("src/results") / "LSTM" / method_label / split / "pred_residuals.csv"
     else:
@@ -68,10 +49,6 @@ def load_pred(method_label: str, split: str) -> pd.DataFrame:
 
 
 def _denorm_residuals(df: pd.DataFrame, scalers: pd.DataFrame, col_in: str, col_out: str) -> pd.DataFrame:
-    """
-    Convert Z-residuals to RAW residuals using per-ID mean/std from TRAIN.
-    new_col = z * std + mean
-    """
     m = df.merge(scalers, on="Series", how="left")
     if m[["resid_mean", "resid_std"]].isna().any().any():
         missing = m[m["resid_mean"].isna() | m["resid_std"].isna()]["Series"].unique()
@@ -81,11 +58,6 @@ def _denorm_residuals(df: pd.DataFrame, scalers: pd.DataFrame, col_in: str, col_
 
 
 def _compose_y(method_label: str, trend: np.ndarray, seasonal: np.ndarray, resid_raw: np.ndarray) -> np.ndarray:
-    """
-    Compose back to ORIGINAL scale.
-    - STL / additive (log-additive pipeline): y = exp(trend + seasonal + resid)
-    - Multiplicative:                          y = trend * seasonal * resid
-    """
     if method_label == "stats_decompose_multiplicative":
         return trend * seasonal * resid_raw
     else:
@@ -96,10 +68,6 @@ def compose_and_score(method_label: str,
                       comps: pd.DataFrame,
                       preds_raw: pd.DataFrame,
                       scalers: pd.DataFrame) -> pd.DataFrame:
-    """
-    Build y_true (from components + TRUE residuals) and y_hat (components + PRED residuals).
-    Returns a merged DataFrame with ['Series','date','y','y_hat','trend','seasonal','resid_true','resid_pred_raw'].
-    """
     true_raw = _denorm_residuals(
         comps.rename(columns={"residuals_z": "resid_z"})[["Series", "date", "resid_z"]],
         scalers,
@@ -174,8 +142,8 @@ def run(split: str):
     base_dir = Path("data/preprocessed") / method_label
 
     scalers = load_scalers(base_dir)
-    comps   = load_components(base_dir, split)     # trend/seasonal + residuals_z
-    preds   = load_pred(method_label, split)       # z-scored residual predictions
+    comps   = load_components(base_dir, split)     
+    preds   = load_pred(method_label, split)      
 
     comp = compose_and_score(method_label, comps, preds, scalers)
 
@@ -186,14 +154,14 @@ def run(split: str):
     m = metrics(comp)
     m.to_csv(out_data / f"metrics_total_{split}.csv", index=False)
     g = m.loc[m["Series"] == "GLOBAL"].iloc[0]
-    print(f"[{MODEL} · {method_label} · {split}] "
+    print(f"[{MODEL} {method_label} {split}] "
           f"n={int(g['n'])}  MAE={g['MAE']:.4f}  MSE={g['MSE']:.4f}  RMSE={g['RMSE']:.4f}  sMAPE={g['sMAPE']:.4f}")
 
     out_plots = Path("src/results") / MODEL.upper() / method_label / "composed" / split / "plots"
     out_plots.mkdir(parents=True, exist_ok=True)
     for sid in comp["Series"].astype(str).unique()[:12]:
         d = comp[comp["Series"].astype(str) == sid].sort_values("date")
-        plot_series(d, out_plots / f"{split}_{sid}.png", f"{method_label} · {split.upper()} · {sid}")
+        plot_series(d, out_plots / f"{split}_{sid}.png", f"{method_label} {split.upper()} {sid}")
 
 
 if __name__ == "__main__":

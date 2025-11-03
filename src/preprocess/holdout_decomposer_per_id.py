@@ -66,8 +66,8 @@ class HoldoutDecomposer:
                 try:
                     model = ExponentialSmoothing(y_trend, trend="add", seasonal=None, damped_trend=True)
                     fit = model.fit(optimized=True)
-                    fc_all = fit.forecast(offs + horizon)   # forecast far enough
-                    fc = fc_all[offs:]                      # drop the offset part to align with target dates
+                    fc_all = fit.forecast(offs + horizon)   
+                    fc = fc_all[offs:]                      
                 except Exception:
                     fc = np.full(horizon, float(y_trend[-1]))
 
@@ -93,9 +93,9 @@ class HoldoutDecomposer:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df.dropna(subset=["Series", "date", "value"]).sort_values(["Series", "date"])
         df["phase"] = self._phase(df["date"], self.period)
-        df = df.merge(self._seas_tpl, on=["Series", "phase"], how="left")  # per-ID seasonal
+        df = df.merge(self._seas_tpl, on=["Series", "phase"], how="left")  
         df = df.merge(self._forecast_trend_for(df, offset_by_id=offset_by_id),
-                      on=["Series", "date"], how="left")                   # per-ID trend (aligned)
+                      on=["Series", "date"], how="left")                   
 
         if self.method in ("STL", "stats_decompose_additive"):
             if (df["value"] <= 0).any():

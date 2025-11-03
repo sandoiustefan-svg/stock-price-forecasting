@@ -76,10 +76,8 @@ class ArimaBaseline:
             yv  = pd.to_numeric(seq["residuals"], errors="coerce").values
             y   = pd.Series(yv, index=idx)
 
-            # ensure a fixed monthly frequency for forecasting
             freq = pd.infer_freq(y.index)
             if freq is None:
-                # heuristic: all 1st of month -> 'MS', all month-end -> 'M', else default to 'MS'
                 if (y.index.day == 1).all():
                     freq = "MS"
                 elif (y.index.day == y.index.days_in_month).all():

@@ -7,7 +7,7 @@ from typing import Literal
 class Decompose:
     def __init__(self, data: pd.DataFrame, decomp_type: str = "STL"):
         self.data = data
-        self.decomp_type = decomp_type  # reserved for future use
+        self.decomp_type = decomp_type  
 
     def _drop_na(self) -> pd.DataFrame:
         df = self.data.copy()

@@ -1,4 +1,3 @@
-# src/data/window_generator.py
 from __future__ import annotations
 from typing import Sequence, Tuple, Optional, List
 import numpy as np
@@ -6,31 +5,6 @@ import pandas as pd
 
 
 class ResidualWindowGenerator:
-    """
-    Builds windows for a GLOBAL LSTM that predicts residuals:
-      - Training: sliding windows per-ID within TRAIN only (no shuffle, keep ID order).
-      - Validation forecast: one 18-step forecast per ID using last T rows from TRAIN as history.
-      - Test forecast: one 18-step forecast per ID using last T rows from TRAIN+VAL as history.
-
-    Assumes residuals are already per-ID z-scored and optional Fourier features are present.
-
-    Parameters
-    ----------
-    train_df, val_df, test_df : pd.DataFrame
-        Must contain at least [id_col, time_col, label_col] + feature_cols.
-    id_col : str, default "Series"
-    time_col : str, default "date"
-    feature_cols : Sequence[str]
-        Feature columns fed to the model, e.g. ("residuals","sin_1","cos_1","sin_2","cos_2","sin_3","cos_3").
-        The first feature can (and usually should) be the residual itself for autoregressive signal.
-    label_col : str, default "residuals"
-        The target to predict.
-    T : int, default 36
-        Input window length.
-    H : int, default 18
-        Multi-step forecast horizon (direct).
-    """
-
     def __init__(
         self,
         train_df: pd.DataFrame,
@@ -62,13 +36,6 @@ class ResidualWindowGenerator:
             self._require_columns(self.test, need={self.id_col, self.time_col, self.label_col, *self.feature_cols})
 
     def build_train_windows(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Returns
-        -------
-        X : np.ndarray, shape (N, T, F)
-        y : np.ndarray, shape (N, H)
-        Sliding windows per-ID inside TRAIN only (global dataset).
-        """
         X_list: List[np.ndarray] = []
         y_list: List[np.ndarray] = []
 
@@ -88,10 +55,6 @@ class ResidualWindowGenerator:
 
 
     def forecast_val(self, model) -> pd.DataFrame:
-        """
-        One direct H-step forecast per ID in VAL using last T rows from TRAIN as history.
-        Returns DataFrame ['Series','date','resid_pred'] aligned to VAL dates.
-        """
         if self.val is None:
             return pd.DataFrame(columns=[self.id_col, self.time_col, "resid_pred"])
 
@@ -112,10 +75,6 @@ class ResidualWindowGenerator:
         return pd.concat(out_frames, ignore_index=True) if out_frames else pd.DataFrame(columns=[self.id_col, self.time_col, "resid_pred"])
 
     def forecast_test(self, model) -> pd.DataFrame:
-        """
-        One direct H-step forecast per ID in TEST using last T rows from TRAIN+VAL as history.
-        Returns DataFrame ['Series','date','resid_pred'] aligned to TEST dates.
-        """
         if self.test is None:
             return pd.DataFrame(columns=[self.id_col, self.time_col, "resid_pred"])
 
@@ -152,14 +111,10 @@ class ResidualWindowGenerator:
             raise KeyError(f"Missing required columns: {sorted(missing)}")
 
     def _history_input(self, df: pd.DataFrame, sid, already_filtered: bool = False) -> Optional[np.ndarray]:
-        """
-        Take last T rows of FEATURES for the given id from df and shape to (1, T, F).
-        Returns None if insufficient history.
-        """
         if not already_filtered:
             g = df.loc[df[self.id_col] == sid].sort_values(self.time_col)
         else:
-            g = df.sort_values(self.time_col)  # df already filtered
+            g = df.sort_values(self.time_col)  
         if g.empty or len(g) < self.T:
             return None
         Xf = g.loc[:, self.feature_cols].to_numpy(dtype=float, copy=False)

@@ -1,4 +1,3 @@
-# src/model/residual_lstm.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,7 +42,6 @@ class ResidualLSTM:
         )(x)
         x = tf.keras.layers.Dropout(0.1)(x)
 
-        # small dense head before the horizon
         x = tf.keras.layers.Dense(128, activation="relu",
                                 kernel_regularizer=tf.keras.regularizers.l2(1e-4))(x)
         x = tf.keras.layers.Dropout(0.2)(x)
@@ -52,7 +50,6 @@ class ResidualLSTM:
 
         self.model = tf.keras.models.Model(inputs=inp, outputs=out, name="ResidualLSTM")
 
-        # robust loss + smaller LR + gradient clipping
         huber = tf.keras.losses.Huber(delta=1.0)
         opt = tf.keras.optimizers.Adam(learning_rate=3e-4, clipnorm=1.0)
 
