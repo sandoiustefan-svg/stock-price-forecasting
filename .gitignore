@@ -1,2 +1,4 @@
-#ignore all csv files
+# ignore all CSVs
 *.csv
+
+!data/raw/Industry_Month.csv
