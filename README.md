@@ -12,25 +12,28 @@ python -m model.Arima_main
 # 3) Recompose predictions to the original scale + evaluate
 python main.py
 
+## Repository layout
+
+```text
 .
 ├─ model/
-│  ├─ Arima_main.py          # Orchestrates per-ID SARIMA training & forecasting on residuals
-│  ├─ Arima_model.py         # Statsmodels SARIMA wrapper + small AIC grid
-│  ├─ LSTM_main.py           # Orchestrates global LSTM training & validation on residuals
-│  └─ LSTM_model.py          # Keras model definition (direct H-step output head)
+│  ├─ Arima_main.py                  # Orchestrates per-ID SARIMA training & forecasting
+│  ├─ Arima_model.py                 # Statsmodels SARIMA wrapper + small AIC grid
+│  ├─ LSTM_main.py                   # Orchestrates global LSTM training & validation
+│  └─ LSTM_model.py                  # Keras model (direct H-step output head)
 │
 ├─ preprocess/
-│  ├─ main_preprocess.py     # END-TO-END PREPROCESS: wide→long, splits, decomposition, scaling
-│  ├─ data_formating.py      # Wide CSV → tidy long (Series, date, value)
-│  ├─ decomp_per_id.py       # Per-ID decomposition (STL / additive / multiplicative)
-│  ├─ holdout_decomposer_per_id.py # Trend continuation + seasonal templating for VAL/TEST
-│  ├─ normalize_per_id.py    # Train-only z-score per ID; apply to val/test
-│  └─ plot_decomposition.py  # Optional diagnostics plots per ID
+│  ├─ main_preprocess.py             # END-TO-END PREPROCESS: wide→long, splits, decomp, scaling
+│  ├─ data_formating.py              # Wide CSV → tidy long (Series, date, value)
+│  ├─ decomp_per_id.py               # Per-ID decomposition (STL / additive / multiplicative)
+│  ├─ holdout_decomposer_per_id.py   # Trend continuation + seasonal templating for VAL/TEST
+│  ├─ normalize_per_id.py            # Train-only z-score per ID; apply to val/test
+│  └─ plot_decomposition.py          # Optional diagnostics plots
 │
 ├─ results/
-│  ├─ Window_Generator.py    # Sliding-window builder for LSTM (T × F → H)
-│  └─ ...                    # Artifacts: processed tables, predictions, metrics, figures
+│  ├─ Window_Generator.py            # Sliding-window builder for LSTM (T × F → H)
+│  └─ ...                            # Artifacts: processed tables, predictions, metrics, figures
 │
-├─ main.py                   # Recompose (trend + season + residual) and compute metrics
-├─ pyproject.toml            # Project metadata & dependencies
+├─ main.py                           # Recompose (trend + season + residual) and compute metrics
+├─ pyproject.toml                    # Project metadata & dependencies
 └─ README.md
