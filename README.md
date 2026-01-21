@@ -1,5 +1,43 @@
-# Stocks-forecasting
+# Stock Price Forecasting
 
+An end-to-end time-series forecasting pipeline combining **statistical** and **deep learning** models to predict stock prices.  
+The approach decomposes each time series into **trend, seasonality, and residuals**, models residual dynamics with both **ARIMA** (per-asset) and a **global LSTM**, and then recomposes predictions back to the original scale for evaluation.
+
+---
+
+## 📄 Research Paper
+This repository accompanies the research paper:
+
+**📎 Paper:** [Stock Price Forecasting with Hybrid ARIMA–LSTM Models](paper/stock-price-forecasting.pdf)
+
+The paper details:
+- the decomposition strategy,
+- the modeling choices (ARIMA vs. global LSTM),
+- experimental setup and evaluation,
+- and a comparison of forecasting performance across assets.
+
+---
+
+## 🚀 Pipeline Overview
+
+1. **Preprocessing**
+   - Decompose each time series (per ID)
+   - Train/validation/test split
+   - Normalize residuals using train-only statistics
+
+2. **Modeling**
+   - **Global LSTM** trained on residuals across all assets
+   - **Per-ID ARIMA/SARIMA** baselines on residuals
+
+3. **Recomposition & Evaluation**
+   - Recompose predictions (trend + seasonality + residual)
+   - Compute forecasting metrics on the original scale
+
+---
+
+## ▶️ How to Run
+
+```bash
 # 1) Preprocess (decompose per ID, split, normalize)
 python -m preprocess.main_preprocess
 
@@ -9,31 +47,5 @@ python -m model.LSTM_main
 # 2b) Train per-ID ARIMA baselines on residuals
 python -m model.Arima_main
 
-# 3) Recompose predictions to the original scale + evaluate
+# 3) Recompose predictions and evaluate
 python main.py
-
-## Repository layout
-
-```text
-.
-├─ model/
-│  ├─ Arima_main.py                  # Orchestrates per-ID SARIMA training & forecasting
-│  ├─ Arima_model.py                 # Statsmodels SARIMA wrapper + small AIC grid
-│  ├─ LSTM_main.py                   # Orchestrates global LSTM training & validation
-│  └─ LSTM_model.py                  # Keras model (direct H-step output head)
-│
-├─ preprocess/
-│  ├─ main_preprocess.py             # END-TO-END PREPROCESS: wide→long, splits, decomp, scaling
-│  ├─ data_formating.py              # Wide CSV → tidy long (Series, date, value)
-│  ├─ decomp_per_id.py               # Per-ID decomposition (STL / additive / multiplicative)
-│  ├─ holdout_decomposer_per_id.py   # Trend continuation + seasonal templating for VAL/TEST
-│  ├─ normalize_per_id.py            # Train-only z-score per ID; apply to val/test
-│  └─ plot_decomposition.py          # Optional diagnostics plots
-│
-├─ results/
-│  ├─ Window_Generator.py            # Sliding-window builder for LSTM (T × F → H)
-│  └─ ...                            # Artifacts: processed tables, predictions, metrics, figures
-│
-├─ main.py                           # Recompose (trend + season + residual) and compute metrics
-├─ pyproject.toml                    # Project metadata & dependencies
-└─ README.md
