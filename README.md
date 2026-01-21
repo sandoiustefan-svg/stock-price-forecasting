@@ -8,7 +8,7 @@ The approach decomposes each time series into **trend, seasonality, and residual
 ## 📄 Research Paper
 This repository accompanies the research paper:
 
-**📎 Paper:** [Stock Price Forecasting with Hybrid ARIMA–LSTM Models](Neural_Networks_Project (3).pdf)
+**📎 Paper:** [Stock Price Forecasting with Hybrid ARIMA–LSTM Models](paper/stock-price-forecasting-paper.pdf)
 
 The paper details:
 - the decomposition strategy,
